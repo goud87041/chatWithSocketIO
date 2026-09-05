@@ -134,4 +134,34 @@ router.get(
   }
 );
 
+/**
+ * GET /api/auth/users
+ * Get all registered users (except the requesting user).
+ */
+router.get(
+  "/users",
+  authenticateToken,
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const users = await User.find(
+        { _id: { $ne: req.user!.id } },
+        "username createdAt"
+      )
+        .sort({ username: 1 })
+        .lean();
+
+      res.json({
+        users: users.map((u) => ({
+          id: u._id.toString(),
+          username: u.username,
+          createdAt: u.createdAt,
+        })),
+      });
+    } catch (err) {
+      console.error("Fetch users error:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
 export default router;

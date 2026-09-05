@@ -14,19 +14,21 @@ import {
   HiShieldCheck,
 } from "react-icons/hi2";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+
 export default function RegisterPage() {
-  const [username, setUsernameInput] = useState("");
+  const [usernameInput, setUsernameInput] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { setUsername } = useSocket();
+  const { setUsername, setToken } = useSocket();
   const router = useRouter();
 
   const validate = (): string | null => {
-    const trimmed = username.trim();
+    const trimmed = usernameInput.trim();
 
     if (!trimmed) return "Username is required";
     if (trimmed.length < 3) return "Username must be at least 3 characters";
@@ -49,13 +51,33 @@ export default function RegisterPage() {
     setLoading(true);
     setError("");
 
-    // Simulate registration — replace with real API call to backend
-    await new Promise((r) => setTimeout(r, 800));
+    try {
+      const res = await fetch(`${API_URL}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: usernameInput.trim(),
+          password,
+        }),
+      });
 
-    // On success, connect via socket and redirect to chat
-    setUsername(username.trim());
-    router.push("/chat");
-    setLoading(false);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Registration failed");
+        setLoading(false);
+        return;
+      }
+
+      // Store token and set username
+      setToken(data.token);
+      setUsername(data.user.username);
+      router.push("/chat");
+    } catch {
+      setError("Network error. Is the server running?");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -133,7 +155,7 @@ export default function RegisterPage() {
               id="register-username"
               type="text"
               placeholder="Choose a username"
-              value={username}
+              value={usernameInput}
               onChange={(e) => {
                 setUsernameInput(e.target.value);
                 setError("");

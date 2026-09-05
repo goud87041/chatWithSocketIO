@@ -5,6 +5,7 @@ export interface User {
 
 export interface Message {
   id: string;
+  _id?: string; // MongoDB ObjectId (present in history responses)
   from: string;
   to: string;
   content: string;

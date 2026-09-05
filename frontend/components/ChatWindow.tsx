@@ -7,8 +7,11 @@ import UserAvatar from "./UserAvatar";
 import { HiChatBubbleOvalLeftEllipsis } from "react-icons/hi2";
 
 export default function ChatWindow() {
-  const { messages, username, currentChat } = useSocket();
+  const { messages, username, currentChat, typingUser, allUsers } = useSocket();
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const currentChatUser = allUsers.find((u) => u.username === currentChat);
+  const isCurrentChatOnline = currentChatUser ? currentChatUser.isOnline : false;
 
   const filteredMessages = useMemo(() => {
     if (!currentChat) return [];
@@ -45,13 +48,30 @@ export default function ChatWindow() {
     );
   }
 
+  const isPartnerTyping = typingUser === currentChat;
+
   return (
     <div className="chat-window">
       <div className="chat-header">
-        <UserAvatar username={currentChat} size="md" showStatus isOnline />
+        <UserAvatar
+          username={currentChat}
+          size="md"
+          showStatus
+          isOnline={isCurrentChatOnline}
+        />
         <div className="chat-header-info">
           <h3>{currentChat}</h3>
-          <span className="chat-header-status">Online</span>
+          <span
+            className={`chat-header-status ${
+              isPartnerTyping ? "typing" : isCurrentChatOnline ? "online" : "offline"
+            }`}
+          >
+            {isPartnerTyping
+              ? "Typing..."
+              : isCurrentChatOnline
+              ? "Online"
+              : "Offline"}
+          </span>
         </div>
       </div>
 
@@ -61,7 +81,7 @@ export default function ChatWindow() {
             const isMine = msg.from === username;
             return (
               <motion.div
-                key={msg.id}
+                key={msg.id || `${msg.from}-${msg.timestamp}`}
                 className={`message-row ${isMine ? "sent" : "received"}`}
                 initial={{ opacity: 0, y: 20, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -85,7 +105,24 @@ export default function ChatWindow() {
           })}
         </AnimatePresence>
 
-        {filteredMessages.length === 0 && (
+        {/* Typing indicator */}
+        {isPartnerTyping && (
+          <motion.div
+            className="typing-indicator"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+          >
+            <UserAvatar username={currentChat} size="sm" />
+            <div className="typing-dots">
+              <span />
+              <span />
+              <span />
+            </div>
+          </motion.div>
+        )}
+
+        {filteredMessages.length === 0 && !isPartnerTyping && (
           <motion.div
             className="chat-no-messages"
             initial={{ opacity: 0 }}

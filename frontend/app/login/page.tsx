@@ -13,17 +13,19 @@ import {
   HiArrowLeft,
 } from "react-icons/hi2";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+
 export default function LoginPage() {
-  const [username, setUsernameInput] = useState("");
+  const [usernameInput, setUsernameInput] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { setUsername } = useSocket();
+  const { setUsername, setToken } = useSocket();
   const router = useRouter();
 
   const handleLogin = async () => {
-    if (!username.trim()) {
+    if (!usernameInput.trim()) {
       setError("Username is required");
       return;
     }
@@ -35,13 +37,33 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    // Simulate auth check — replace with real API call to backend
-    await new Promise((r) => setTimeout(r, 600));
+    try {
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: usernameInput.trim(),
+          password,
+        }),
+      });
 
-    // For now, accept any valid credentials and connect via socket
-    setUsername(username.trim());
-    router.push("/chat");
-    setLoading(false);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Login failed");
+        setLoading(false);
+        return;
+      }
+
+      // Store token and set username
+      setToken(data.token);
+      setUsername(data.user.username);
+      router.push("/chat");
+    } catch {
+      setError("Network error. Is the server running?");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -105,7 +127,7 @@ export default function LoginPage() {
               id="login-username"
               type="text"
               placeholder="Username"
-              value={username}
+              value={usernameInput}
               onChange={(e) => {
                 setUsernameInput(e.target.value);
                 setError("");

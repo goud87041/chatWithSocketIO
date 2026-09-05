@@ -1,11 +1,32 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { useSocket } from "@/context/SocketContext";
 import { HiChatBubbleLeftRight } from "react-icons/hi2";
 
 export default function Home() {
   const router = useRouter();
+  const { username, isLoading } = useSocket();
+
+  // If already logged in, redirect to chat
+  useEffect(() => {
+    if (!isLoading && username) {
+      router.replace("/chat");
+    }
+  }, [username, isLoading, router]);
+
+  if (isLoading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-content">
+          <span className="spinner" />
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="landing-page">

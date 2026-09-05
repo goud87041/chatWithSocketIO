@@ -10,6 +10,7 @@ export interface Message {
   to: string;
   content: string;
   timestamp: number;
+  status?: "sent" | "delivered" | "seen";
 }
 
 export interface ChatPartner {

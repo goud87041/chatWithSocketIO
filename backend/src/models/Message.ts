@@ -5,6 +5,7 @@ export interface IMessage extends Document {
   to: string;
   content: string;
   timestamp: number;
+  status: "sent" | "delivered" | "seen";
 }
 
 const messageSchema = new Schema<IMessage>(
@@ -30,12 +31,19 @@ const messageSchema = new Schema<IMessage>(
       default: Date.now,
       index: true,
     },
+    status: {
+      type: String,
+      enum: ["sent", "delivered", "seen"],
+      default: "sent",
+      index: true,
+    },
   },
   { timestamps: true }
 );
 
-// Compound index for efficient chat history queries
+// Compound indexes for efficient chat history and unread queries
 messageSchema.index({ from: 1, to: 1, timestamp: -1 });
+messageSchema.index({ to: 1, status: 1 });
 
 const Message = mongoose.model<IMessage>("Message", messageSchema);
 export default Message;

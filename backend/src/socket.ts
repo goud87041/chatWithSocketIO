@@ -9,11 +9,13 @@ interface ConnectedUser {
 }
 
 interface MessagePayload {
-  id: string;
+  id?: string;
+  _id?: string;
   from: string;
   to: string;
   content: string;
   timestamp: number;
+  status?: "sent" | "delivered" | "seen";
 }
 
 // In-memory store of connected users: username -> ConnectedUser
@@ -63,7 +65,7 @@ export function registerSocketHandlers(io: Server): void {
     }
   });
 
-  io.on("connection", (socket: Socket) => {
+  io.on("connection", async (socket: Socket) => {
     // Get username from JWT or fallback to query param
     const username =
       (socket as any).user?.username ||
@@ -86,31 +88,79 @@ export function registerSocketHandlers(io: Server): void {
     // Broadcast updated user list to everyone
     broadcastUserList(io);
 
+    // On user connect, update any messages waiting in 'sent' status to 'delivered'
+    try {
+      const pendingSent = await Message.find({ to: username, status: "sent" }).lean();
+      if (pendingSent.length > 0) {
+        await Message.updateMany(
+          { to: username, status: "sent" },
+          { $set: { status: "delivered" } }
+        );
+        const senders = new Set(pendingSent.map((m) => m.from));
+        senders.forEach((senderName) => {
+          const sender = onlineUsers.get(senderName);
+          if (sender) {
+            io.to(sender.socketId).emit("messages-delivered", { to: username });
+          }
+        });
+      }
+    } catch (err) {
+      console.error("Error updating pending sent messages:", err);
+    }
+
     // Handle incoming messages — relay + persist to DB
     socket.on("send-message", async (message: MessagePayload) => {
       // Validate message
       if (!message.to || !message.content?.trim()) return;
 
       const recipient = onlineUsers.get(message.to);
+      const initialStatus: "sent" | "delivered" = recipient ? "delivered" : "sent";
 
-      // Send to recipient if they are online
-      if (recipient) {
-        io.to(recipient.socketId).emit("receive-message", message);
-      }
-
-      // Echo back to sender as confirmation
-      socket.emit("message-sent", message);
+      const msgWithStatus: MessagePayload = {
+        ...message,
+        status: initialStatus,
+      };
 
       // Persist message to MongoDB
       try {
-        await Message.create({
+        const savedMsg = await Message.create({
           from: message.from,
           to: message.to,
           content: message.content.trim(),
-          timestamp: message.timestamp,
+          timestamp: message.timestamp || Date.now(),
+          status: initialStatus,
         });
+        msgWithStatus._id = savedMsg._id.toString();
       } catch (err) {
         console.error("Failed to save message:", err);
+      }
+
+      // Send to recipient if they are online
+      if (recipient) {
+        io.to(recipient.socketId).emit("receive-message", msgWithStatus);
+      }
+
+      // Echo back to sender as confirmation with assigned status
+      socket.emit("message-sent", msgWithStatus);
+    });
+
+    // Handle mark-seen event (when user views a conversation)
+    socket.on("mark-seen", async (data: { from: string }) => {
+      const senderUsername = data.from;
+      if (!senderUsername) return;
+
+      try {
+        await Message.updateMany(
+          { from: senderUsername, to: username, status: { $ne: "seen" } },
+          { $set: { status: "seen" } }
+        );
+
+        const sender = onlineUsers.get(senderUsername);
+        if (sender) {
+          io.to(sender.socketId).emit("messages-seen", { by: username });
+        }
+      } catch (err) {
+        console.error("Failed to mark messages seen:", err);
       }
     });
 

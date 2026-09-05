@@ -9,14 +9,25 @@ import ChatWindow from "@/components/ChatWindow";
 import MessageInput from "@/components/MessageInput";
 
 export default function ChatPage() {
-  const { username } = useSocket();
+  const { username, isLoading } = useSocket();
   const router = useRouter();
 
   useEffect(() => {
-    if (!username) {
+    if (!isLoading && !username) {
       router.replace("/");
     }
-  }, [username, router]);
+  }, [username, isLoading, router]);
+
+  if (isLoading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-content">
+          <span className="spinner" />
+          <p>Restoring session...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!username) return null;
 

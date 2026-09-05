@@ -1,12 +1,20 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { useSocket } from "@/context/SocketContext";
 import UserAvatar from "./UserAvatar";
-import { HiChatBubbleLeftRight } from "react-icons/hi2";
+import { HiChatBubbleLeftRight, HiArrowRightOnRectangle } from "react-icons/hi2";
 
 export default function Sidebar() {
-  const { onlineUsers, currentChat, setCurrentChat, username } = useSocket();
+  const { onlineUsers, currentChat, setCurrentChat, username, logout, isConnected } =
+    useSocket();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout();
+    router.push("/");
+  };
 
   return (
     <aside className="sidebar">
@@ -18,6 +26,11 @@ export default function Sidebar() {
         <div className="sidebar-user">
           <UserAvatar username={username} size="sm" />
           <span className="sidebar-username">{username}</span>
+          <span
+            className={`connection-badge ${isConnected ? "connected" : "disconnected"}`}
+          >
+            {isConnected ? "Connected" : "Offline"}
+          </span>
         </div>
       </div>
 
@@ -65,6 +78,19 @@ export default function Sidebar() {
             ))
           )}
         </AnimatePresence>
+      </div>
+
+      {/* Logout Button */}
+      <div className="sidebar-footer">
+        <motion.button
+          className="logout-button"
+          onClick={handleLogout}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <HiArrowRightOnRectangle size={18} />
+          <span>Logout</span>
+        </motion.button>
       </div>
     </aside>
   );

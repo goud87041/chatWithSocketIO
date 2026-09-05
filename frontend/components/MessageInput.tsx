@@ -1,20 +1,32 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useSocket } from "@/context/SocketContext";
 import { HiPaperAirplane } from "react-icons/hi2";
 
 export default function MessageInput() {
-  const { sendMessage, currentChat } = useSocket();
+  const { sendMessage, currentChat, emitTyping, emitStopTyping } = useSocket();
   const [text, setText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isTypingRef = useRef(false);
 
   const handleSend = () => {
     if (!currentChat || !text.trim()) return;
     sendMessage(currentChat, text);
     setText("");
     inputRef.current?.focus();
+
+    // Stop typing indicator on send
+    if (isTypingRef.current) {
+      emitStopTyping(currentChat);
+      isTypingRef.current = false;
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -23,6 +35,43 @@ export default function MessageInput() {
       handleSend();
     }
   };
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setText(e.target.value);
+
+      if (!currentChat) return;
+
+      // Emit typing indicator
+      if (!isTypingRef.current) {
+        emitTyping(currentChat);
+        isTypingRef.current = true;
+      }
+
+      // Reset the stop-typing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      typingTimeoutRef.current = setTimeout(() => {
+        if (currentChat && isTypingRef.current) {
+          emitStopTyping(currentChat);
+          isTypingRef.current = false;
+        }
+      }, 1500);
+    },
+    [currentChat, emitTyping, emitStopTyping]
+  );
+
+  // Clean up typing state when switching chats
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      isTypingRef.current = false;
+    };
+  }, [currentChat]);
 
   const disabled = !currentChat;
 
@@ -33,7 +82,7 @@ export default function MessageInput() {
         type="text"
         placeholder={disabled ? "Select a user to start chatting..." : "Type a message..."}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={handleChange}
         onKeyDown={handleKeyDown}
         disabled={disabled}
         className="message-input"

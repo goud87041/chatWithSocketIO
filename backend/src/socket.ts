@@ -1,4 +1,6 @@
 import { Server, Socket } from "socket.io";
+import jwt from "jsonwebtoken";
+import Message from "./models/Message.js";
 
 interface ConnectedUser {
   username: string;
@@ -6,7 +8,7 @@ interface ConnectedUser {
   isOnline: boolean;
 }
 
-interface Message {
+interface MessagePayload {
   id: string;
   from: string;
   to: string;
@@ -33,10 +35,39 @@ function broadcastUserList(io: Server): void {
 
 /**
  * Registers all Socket.IO event handlers.
+ * Connections are authenticated via JWT token sent in socket.handshake.auth.
  */
 export function registerSocketHandlers(io: Server): void {
+  // Authenticate socket connections via JWT
+  io.use((socket, next) => {
+    const token = socket.handshake.auth.token as string;
+
+    // Also support query-based username for backward compatibility
+    if (!token && socket.handshake.query.username) {
+      return next();
+    }
+
+    if (!token) {
+      return next(new Error("Authentication required"));
+    }
+
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+        id: string;
+        username: string;
+      };
+      (socket as any).user = decoded;
+      next();
+    } catch {
+      next(new Error("Invalid token"));
+    }
+  });
+
   io.on("connection", (socket: Socket) => {
-    const username = socket.handshake.query.username as string;
+    // Get username from JWT or fallback to query param
+    const username =
+      (socket as any).user?.username ||
+      (socket.handshake.query.username as string);
 
     if (!username) {
       socket.disconnect(true);
@@ -55,8 +86,11 @@ export function registerSocketHandlers(io: Server): void {
     // Broadcast updated user list to everyone
     broadcastUserList(io);
 
-    // Handle incoming messages
-    socket.on("send-message", (message: Message) => {
+    // Handle incoming messages — relay + persist to DB
+    socket.on("send-message", async (message: MessagePayload) => {
+      // Validate message
+      if (!message.to || !message.content?.trim()) return;
+
       const recipient = onlineUsers.get(message.to);
 
       // Send to recipient if they are online
@@ -66,6 +100,33 @@ export function registerSocketHandlers(io: Server): void {
 
       // Echo back to sender as confirmation
       socket.emit("message-sent", message);
+
+      // Persist message to MongoDB
+      try {
+        await Message.create({
+          from: message.from,
+          to: message.to,
+          content: message.content.trim(),
+          timestamp: message.timestamp,
+        });
+      } catch (err) {
+        console.error("Failed to save message:", err);
+      }
+    });
+
+    // Handle typing events
+    socket.on("typing", (data: { to: string }) => {
+      const recipient = onlineUsers.get(data.to);
+      if (recipient) {
+        io.to(recipient.socketId).emit("user-typing", { username });
+      }
+    });
+
+    socket.on("stop-typing", (data: { to: string }) => {
+      const recipient = onlineUsers.get(data.to);
+      if (recipient) {
+        io.to(recipient.socketId).emit("user-stopped-typing", { username });
+      }
     });
 
     // Handle disconnection

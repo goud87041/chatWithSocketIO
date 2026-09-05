@@ -7,6 +7,7 @@ import React, {
   useState,
   useCallback,
   useRef,
+  useMemo,
 } from "react";
 import { io, Socket } from "socket.io-client";
 import type { Message, ChatPartner } from "@/types";
@@ -19,7 +20,10 @@ interface SocketContextValue {
   isConnected: boolean;
   username: string;
   setUsername: (name: string) => void;
+  allUsers: ChatPartner[];
   onlineUsers: ChatPartner[];
+  offlineUsers: ChatPartner[];
+  refreshUsers: () => void;
   messages: Message[];
   sendMessage: (to: string, content: string) => void;
   currentChat: string | null;
@@ -38,7 +42,10 @@ const SocketContext = createContext<SocketContextValue>({
   isConnected: false,
   username: "",
   setUsername: () => {},
+  allUsers: [],
   onlineUsers: [],
+  offlineUsers: [],
+  refreshUsers: () => {},
   messages: [],
   sendMessage: () => {},
   currentChat: null,
@@ -58,7 +65,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [username, setUsername] = useState("");
-  const [onlineUsers, setOnlineUsers] = useState<ChatPartner[]>([]);
+  const [registeredUsers, setRegisteredUsers] = useState<string[]>([]);
+  const [onlineUsernames, setOnlineUsernames] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentChat, setCurrentChatState] = useState<string | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
@@ -66,6 +74,72 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  /**
+   * Fetch registered users from backend
+   */
+  const fetchRegisteredUsers = useCallback(async (authToken?: string) => {
+    const activeToken =
+      authToken || token || (typeof window !== "undefined" ? localStorage.getItem("chatpulse_token") : null);
+    if (!activeToken) return;
+
+    try {
+      const res = await fetch(`${API_URL}/auth/users`, {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.users)) {
+        setRegisteredUsers(data.users.map((u: { username: string }) => u.username));
+      }
+    } catch (err) {
+      console.error("Failed to fetch registered users:", err);
+    }
+  }, [token]);
+
+  const refreshUsers = useCallback(() => {
+    fetchRegisteredUsers();
+  }, [fetchRegisteredUsers]);
+
+  /**
+   * Fetch users whenever token changes
+   */
+  useEffect(() => {
+    if (token) {
+      fetchRegisteredUsers(token);
+    }
+  }, [token, fetchRegisteredUsers]);
+
+  /**
+   * Computed list of all users with live online/offline status
+   */
+  const allUsers = useMemo<ChatPartner[]>(() => {
+    const nameSet = new Set<string>();
+    registeredUsers.forEach((name) => {
+      if (name && name !== username) nameSet.add(name);
+    });
+    onlineUsernames.forEach((name) => {
+      if (name && name !== username) nameSet.add(name);
+    });
+
+    const onlineSet = new Set(onlineUsernames);
+
+    return Array.from(nameSet).map((name) => ({
+      username: name,
+      socketId: "",
+      isOnline: onlineSet.has(name),
+    }));
+  }, [registeredUsers, onlineUsernames, username]);
+
+  const onlineUsers = useMemo(
+    () => allUsers.filter((u) => u.isOnline),
+    [allUsers]
+  );
+
+  const offlineUsers = useMemo(
+    () => allUsers.filter((u) => !u.isOnline),
+    [allUsers]
+  );
 
   /**
    * Store token in state + localStorage
@@ -90,7 +164,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     setSocket(null);
     setIsConnected(false);
     setUsername("");
-    setOnlineUsers([]);
+    setRegisteredUsers([]);
+    setOnlineUsernames([]);
     setMessages([]);
     setCurrentChatState(null);
     setToken(null);
@@ -118,6 +193,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       .then((data) => {
         setTokenState(storedToken);
         setUsername(data.user.username);
+        fetchRegisteredUsers(storedToken);
       })
       .catch(() => {
         localStorage.removeItem("chatpulse_token");
@@ -125,7 +201,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       .finally(() => {
         setIsLoading(false);
       });
-  }, []);
+  }, [fetchRegisteredUsers]);
 
   /**
    * Connect to Socket.IO when username + token are available
@@ -150,8 +226,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setIsConnected(false);
     });
 
-    newSocket.on("user-list", (users: ChatPartner[]) => {
-      setOnlineUsers(users.filter((u) => u.username !== username));
+    newSocket.on("user-list", (users: { username: string }[]) => {
+      const onlineNames = users
+        .map((u) => u.username)
+        .filter((name) => name !== username);
+      setOnlineUsernames(onlineNames);
     });
 
     newSocket.on("receive-message", (message: Message) => {
@@ -260,7 +339,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         isConnected,
         username,
         setUsername,
+        allUsers,
         onlineUsers,
+        offlineUsers,
+        refreshUsers,
         messages,
         sendMessage,
         currentChat,

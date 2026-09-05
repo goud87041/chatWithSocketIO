@@ -7,8 +7,16 @@ import UserAvatar from "./UserAvatar";
 import { HiChatBubbleLeftRight, HiArrowRightOnRectangle } from "react-icons/hi2";
 
 export default function Sidebar() {
-  const { onlineUsers, currentChat, setCurrentChat, username, logout, isConnected } =
-    useSocket();
+  const {
+    onlineUsers,
+    offlineUsers,
+    allUsers,
+    currentChat,
+    setCurrentChat,
+    username,
+    logout,
+    isConnected,
+  } = useSocket();
   const router = useRouter();
 
   const handleLogout = () => {
@@ -34,50 +42,81 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <div className="sidebar-section-title">
-        <span>Online</span>
-        <span className="online-count">{onlineUsers.length}</span>
-      </div>
-
       <div className="sidebar-list">
-        <AnimatePresence>
-          {onlineUsers.length === 0 ? (
-            <motion.div
-              className="sidebar-empty"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <p>No one else is online yet.</p>
-              <p className="sidebar-empty-hint">Share this app to start chatting!</p>
-            </motion.div>
-          ) : (
-            onlineUsers.map((user, index) => (
-              <motion.button
-                key={user.username}
-                className={`sidebar-item ${currentChat === user.username ? "active" : ""}`}
-                onClick={() => setCurrentChat(user.username)}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ delay: index * 0.05, type: "spring", stiffness: 200 }}
-                whileHover={{ x: 4 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <UserAvatar
-                  username={user.username}
-                  size="md"
-                  showStatus
-                  isOnline
-                />
-                <div className="sidebar-item-info">
-                  <span className="sidebar-item-name">{user.username}</span>
-                  <span className="sidebar-item-status">Online</span>
+        {allUsers.length === 0 ? (
+          <div className="sidebar-empty">
+            <p>No other users found.</p>
+            <p className="sidebar-empty-hint">Create another account to start chatting!</p>
+          </div>
+        ) : (
+          <>
+            {/* Online Users Section */}
+            {onlineUsers.length > 0 && (
+              <div className="sidebar-group">
+                <div className="sidebar-section-title">
+                  <span>Online</span>
+                  <span className="online-count">{onlineUsers.length}</span>
                 </div>
-              </motion.button>
-            ))
-          )}
-        </AnimatePresence>
+                {onlineUsers.map((user, index) => (
+                  <motion.button
+                    key={user.username}
+                    className={`sidebar-item ${currentChat === user.username ? "active" : ""}`}
+                    onClick={() => setCurrentChat(user.username)}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.04, type: "spring", stiffness: 200 }}
+                    whileHover={{ x: 4 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <UserAvatar
+                      username={user.username}
+                      size="md"
+                      showStatus
+                      isOnline={true}
+                    />
+                    <div className="sidebar-item-info">
+                      <span className="sidebar-item-name">{user.username}</span>
+                      <span className="sidebar-item-status online">Online</span>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            )}
+
+            {/* Offline Users Section */}
+            {offlineUsers.length > 0 && (
+              <div className="sidebar-group">
+                <div className="sidebar-section-title">
+                  <span>Offline</span>
+                  <span className="offline-count">{offlineUsers.length}</span>
+                </div>
+                {offlineUsers.map((user, index) => (
+                  <motion.button
+                    key={user.username}
+                    className={`sidebar-item offline ${currentChat === user.username ? "active" : ""}`}
+                    onClick={() => setCurrentChat(user.username)}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.04, type: "spring", stiffness: 200 }}
+                    whileHover={{ x: 4 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <UserAvatar
+                      username={user.username}
+                      size="md"
+                      showStatus
+                      isOnline={false}
+                    />
+                    <div className="sidebar-item-info">
+                      <span className="sidebar-item-name">{user.username}</span>
+                      <span className="sidebar-item-status offline">Offline</span>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Logout Button */}

@@ -542,6 +542,22 @@ input {
   text-align: center;
 }
 
+.offline-count {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  min-width: 22px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+
+.sidebar-group {
+  margin-bottom: 12px;
+}
+
 .sidebar-list {
   flex: 1;
   overflow-y: auto;
@@ -571,12 +587,20 @@ input {
   width: 100%;
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  transition: background var(--transition-fast);
+  transition: background var(--transition-fast), opacity var(--transition-fast);
   text-align: left;
 }
 
 .sidebar-item:hover {
   background: var(--bg-glass-hover);
+}
+
+.sidebar-item.offline {
+  opacity: 0.82;
+}
+
+.sidebar-item.offline:hover {
+  opacity: 1;
 }
 
 .sidebar-item.active {
@@ -603,6 +627,23 @@ input {
 .sidebar-item-status {
   font-size: 0.8rem;
   color: var(--success);
+}
+
+.sidebar-item-status.online {
+  color: var(--success);
+}
+
+.sidebar-item-status.offline {
+  color: var(--text-muted);
+}
+
+.status-dot.online {
+  background-color: var(--success);
+  box-shadow: 0 0 8px var(--success-glow);
+}
+
+.status-dot.offline {
+  background-color: var(--text-muted);
 }
 
 /* ---- Chat Panel ---- */
@@ -669,7 +710,20 @@ input {
 
 .chat-header-status {
   font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.chat-header-status.online {
   color: var(--success);
+}
+
+.chat-header-status.offline {
+  color: var(--text-muted);
+}
+
+.chat-header-status.typing {
+  color: var(--accent-light);
+  font-weight: 600;
 }
 
 .chat-messages {

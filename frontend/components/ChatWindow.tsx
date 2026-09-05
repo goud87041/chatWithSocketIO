@@ -7,8 +7,11 @@ import UserAvatar from "./UserAvatar";
 import { HiChatBubbleOvalLeftEllipsis } from "react-icons/hi2";
 
 export default function ChatWindow() {
-  const { messages, username, currentChat, typingUser } = useSocket();
+  const { messages, username, currentChat, typingUser, allUsers } = useSocket();
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const currentChatUser = allUsers.find((u) => u.username === currentChat);
+  const isCurrentChatOnline = currentChatUser ? currentChatUser.isOnline : false;
 
   const filteredMessages = useMemo(() => {
     if (!currentChat) return [];
@@ -50,11 +53,24 @@ export default function ChatWindow() {
   return (
     <div className="chat-window">
       <div className="chat-header">
-        <UserAvatar username={currentChat} size="md" showStatus isOnline />
+        <UserAvatar
+          username={currentChat}
+          size="md"
+          showStatus
+          isOnline={isCurrentChatOnline}
+        />
         <div className="chat-header-info">
           <h3>{currentChat}</h3>
-          <span className="chat-header-status">
-            {isPartnerTyping ? "Typing..." : "Online"}
+          <span
+            className={`chat-header-status ${
+              isPartnerTyping ? "typing" : isCurrentChatOnline ? "online" : "offline"
+            }`}
+          >
+            {isPartnerTyping
+              ? "Typing..."
+              : isCurrentChatOnline
+              ? "Online"
+              : "Offline"}
           </span>
         </div>
       </div>

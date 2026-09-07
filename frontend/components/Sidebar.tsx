@@ -11,6 +11,7 @@ export default function Sidebar() {
     onlineUsers,
     offlineUsers,
     allUsers,
+    unreadCounts,
     currentChat,
     setCurrentChat,
     username,
@@ -57,29 +58,37 @@ export default function Sidebar() {
                   <span>Online</span>
                   <span className="online-count">{onlineUsers.length}</span>
                 </div>
-                {onlineUsers.map((user, index) => (
-                  <motion.button
-                    key={user.username}
-                    className={`sidebar-item ${currentChat === user.username ? "active" : ""}`}
-                    onClick={() => setCurrentChat(user.username)}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.04, type: "spring", stiffness: 200 }}
-                    whileHover={{ x: 4 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <UserAvatar
-                      username={user.username}
-                      size="md"
-                      showStatus
-                      isOnline={true}
-                    />
-                    <div className="sidebar-item-info">
-                      <span className="sidebar-item-name">{user.username}</span>
-                      <span className="sidebar-item-status online">Online</span>
-                    </div>
-                  </motion.button>
-                ))}
+                {onlineUsers.map((user, index) => {
+                  const unread = unreadCounts[user.username] || 0;
+                  return (
+                    <motion.button
+                      key={user.username}
+                      className={`sidebar-item ${currentChat === user.username ? "active" : ""}`}
+                      onClick={() => setCurrentChat(user.username)}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.04, type: "spring", stiffness: 200 }}
+                      whileHover={{ x: 4 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <UserAvatar
+                        username={user.username}
+                        size="md"
+                        showStatus
+                        isOnline={true}
+                      />
+                      <div className="sidebar-item-info">
+                        <span className="sidebar-item-name">{user.username}</span>
+                        <span className="sidebar-item-status online">Online</span>
+                      </div>
+                      {unread > 0 && (
+                        <span className="sidebar-unread-badge">
+                          {unread > 99 ? "99+" : unread}
+                        </span>
+                      )}
+                    </motion.button>
+                  );
+                })}
               </div>
             )}
 
@@ -90,29 +99,37 @@ export default function Sidebar() {
                   <span>Offline</span>
                   <span className="offline-count">{offlineUsers.length}</span>
                 </div>
-                {offlineUsers.map((user, index) => (
-                  <motion.button
-                    key={user.username}
-                    className={`sidebar-item offline ${currentChat === user.username ? "active" : ""}`}
-                    onClick={() => setCurrentChat(user.username)}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.04, type: "spring", stiffness: 200 }}
-                    whileHover={{ x: 4 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <UserAvatar
-                      username={user.username}
-                      size="md"
-                      showStatus
-                      isOnline={false}
-                    />
-                    <div className="sidebar-item-info">
-                      <span className="sidebar-item-name">{user.username}</span>
-                      <span className="sidebar-item-status offline">Offline</span>
-                    </div>
-                  </motion.button>
-                ))}
+                {offlineUsers.map((user, index) => {
+                  const unread = unreadCounts[user.username] || 0;
+                  return (
+                    <motion.button
+                      key={user.username}
+                      className={`sidebar-item offline ${currentChat === user.username ? "active" : ""}`}
+                      onClick={() => setCurrentChat(user.username)}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.04, type: "spring", stiffness: 200 }}
+                      whileHover={{ x: 4 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <UserAvatar
+                        username={user.username}
+                        size="md"
+                        showStatus
+                        isOnline={false}
+                      />
+                      <div className="sidebar-item-info">
+                        <span className="sidebar-item-name">{user.username}</span>
+                        <span className="sidebar-item-status offline">Offline</span>
+                      </div>
+                      {unread > 0 && (
+                        <span className="sidebar-unread-badge">
+                          {unread > 99 ? "99+" : unread}
+                        </span>
+                      )}
+                    </motion.button>
+                  );
+                })}
               </div>
             )}
           </>

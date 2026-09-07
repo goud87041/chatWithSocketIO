@@ -613,6 +613,20 @@ input {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
+}
+
+.sidebar-unread-badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  min-width: 20px;
+  text-align: center;
+  box-shadow: 0 0 10px var(--accent-glow);
+  flex-shrink: 0;
 }
 
 .sidebar-item-name {
@@ -703,6 +717,10 @@ input {
   border-bottom: 1px solid var(--border);
 }
 
+.chat-header-info {
+  flex: 1;
+}
+
 .chat-header-info h3 {
   font-size: 1rem;
   font-weight: 700;
@@ -724,6 +742,152 @@ input {
 .chat-header-status.typing {
   color: var(--accent-light);
   font-weight: 600;
+}
+
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-reload-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.chat-reload-btn:hover:not(:disabled) {
+  background: var(--bg-glass-hover);
+  color: var(--text-primary);
+  border-color: var(--border-active);
+}
+
+.chat-reload-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- Chat Reloader & Skeleton Loading ---- */
+.chat-reloader-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 12px 0;
+  width: 100%;
+}
+
+.chat-reloader-pill {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(124, 92, 252, 0.12);
+  border: 1px solid var(--border-active);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  color: var(--accent-light);
+  font-size: 0.78rem;
+  font-weight: 600;
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+.reloader-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent-light);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+.skeleton-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.skeleton-row.sent {
+  justify-content: flex-end;
+}
+
+.skeleton-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    var(--bg-tertiary) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  flex-shrink: 0;
+}
+
+.skeleton-bubble {
+  height: 38px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    var(--bg-tertiary) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-bubble.w-40 {
+  width: 40%;
+}
+.skeleton-bubble.w-50 {
+  width: 50%;
+}
+.skeleton-bubble.w-60 {
+  width: 60%;
+}
+.skeleton-bubble.w-75 {
+  width: 75%;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .chat-messages {
@@ -788,11 +952,37 @@ input {
   margin-bottom: 4px;
 }
 
+.message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 2px;
+}
+
 .message-time {
-  display: block;
   font-size: 0.7rem;
-  opacity: 0.6;
-  text-align: right;
+  opacity: 0.65;
+  line-height: 1;
+}
+
+.message-status-tick {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.tick-sent {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.tick-delivered {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.tick-seen {
+  color: #38bdf8;
+  filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.6));
 }
 
 /* ---- Message Input Bar ---- */

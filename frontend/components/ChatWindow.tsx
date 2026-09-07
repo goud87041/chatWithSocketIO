@@ -4,10 +4,19 @@ import { useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSocket } from "@/context/SocketContext";
 import UserAvatar from "./UserAvatar";
-import { HiChatBubbleOvalLeftEllipsis } from "react-icons/hi2";
+import { HiChatBubbleOvalLeftEllipsis, HiArrowPath } from "react-icons/hi2";
+import { IoCheckmark, IoCheckmarkDone } from "react-icons/io5";
 
 export default function ChatWindow() {
-  const { messages, username, currentChat, typingUser, allUsers } = useSocket();
+  const {
+    messages,
+    username,
+    currentChat,
+    typingUser,
+    allUsers,
+    isChatLoading,
+    reloadChat,
+  } = useSocket();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const currentChatUser = allUsers.find((u) => u.username === currentChat);
@@ -73,63 +82,119 @@ export default function ChatWindow() {
               : "Offline"}
           </span>
         </div>
+
+        <div className="chat-header-actions">
+          <motion.button
+            type="button"
+            className={`chat-reload-btn ${isChatLoading ? "loading" : ""}`}
+            onClick={reloadChat}
+            title="Reload conversation"
+            disabled={isChatLoading}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+          >
+            <HiArrowPath size={18} className={isChatLoading ? "spin" : ""} />
+          </motion.button>
+        </div>
       </div>
 
       <div className="chat-messages">
-        <AnimatePresence initial={false}>
-          {filteredMessages.map((msg) => {
-            const isMine = msg.from === username;
-            return (
+        {isChatLoading ? (
+          <div className="chat-reloader-container">
+            <div className="chat-reloader-pill">
+              <span className="reloader-spinner" />
+              <span>Loading messages...</span>
+            </div>
+            <div className="skeleton-chat">
+              <div className="skeleton-row received">
+                <div className="skeleton-avatar" />
+                <div className="skeleton-bubble w-60" />
+              </div>
+              <div className="skeleton-row sent">
+                <div className="skeleton-bubble w-40" />
+              </div>
+              <div className="skeleton-row received">
+                <div className="skeleton-avatar" />
+                <div className="skeleton-bubble w-75" />
+              </div>
+              <div className="skeleton-row sent">
+                <div className="skeleton-bubble w-50" />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <AnimatePresence initial={false}>
+              {filteredMessages.map((msg) => {
+                const isMine = msg.from === username;
+                return (
+                  <motion.div
+                    key={msg.id || `${msg.from}-${msg.timestamp}`}
+                    className={`message-row ${isMine ? "sent" : "received"}`}
+                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  >
+                    {!isMine && (
+                      <UserAvatar username={msg.from} size="sm" />
+                    )}
+                    <div className={`message-bubble ${isMine ? "mine" : "theirs"}`}>
+                      <p>{msg.content}</p>
+                      <div className="message-meta">
+                        <span className="message-time">
+                          {new Date(msg.timestamp).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        {isMine && (
+                          <span className={`message-status-tick ${msg.status || "sent"}`}>
+                            {(!msg.status || msg.status === "sent") && (
+                              <IoCheckmark size={15} className="tick-sent" title="Sent" />
+                            )}
+                            {msg.status === "delivered" && (
+                              <IoCheckmarkDone size={16} className="tick-delivered" title="Delivered" />
+                            )}
+                            {msg.status === "seen" && (
+                              <IoCheckmarkDone size={16} className="tick-seen" title="Seen" />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+
+            {/* Typing indicator */}
+            {isPartnerTyping && (
               <motion.div
-                key={msg.id || `${msg.from}-${msg.timestamp}`}
-                className={`message-row ${isMine ? "sent" : "received"}`}
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
+                className="typing-indicator"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                transition={{ type: "spring", stiffness: 300, damping: 25 }}
               >
-                {!isMine && (
-                  <UserAvatar username={msg.from} size="sm" />
-                )}
-                <div className={`message-bubble ${isMine ? "mine" : "theirs"}`}>
-                  <p>{msg.content}</p>
-                  <span className="message-time">
-                    {new Date(msg.timestamp).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
+                <UserAvatar username={currentChat} size="sm" />
+                <div className="typing-dots">
+                  <span />
+                  <span />
+                  <span />
                 </div>
               </motion.div>
-            );
-          })}
-        </AnimatePresence>
+            )}
 
-        {/* Typing indicator */}
-        {isPartnerTyping && (
-          <motion.div
-            className="typing-indicator"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-          >
-            <UserAvatar username={currentChat} size="sm" />
-            <div className="typing-dots">
-              <span />
-              <span />
-              <span />
-            </div>
-          </motion.div>
-        )}
-
-        {filteredMessages.length === 0 && !isPartnerTyping && (
-          <motion.div
-            className="chat-no-messages"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            <p>No messages yet. Say hello! 👋</p>
-          </motion.div>
+            {filteredMessages.length === 0 && !isPartnerTyping && (
+              <motion.div
+                className="chat-no-messages"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+              >
+                <p>No messages yet. Say hello! 👋</p>
+              </motion.div>
+            )}
+          </>
         )}
 
         <div ref={bottomRef} />

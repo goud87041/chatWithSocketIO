@@ -24,6 +24,7 @@ interface SocketContextValue {
   onlineUsers: ChatPartner[];
   offlineUsers: ChatPartner[];
   refreshUsers: () => void;
+  unreadCounts: Record<string, number>;
   messages: Message[];
   sendMessage: (to: string, content: string) => void;
   currentChat: string | null;
@@ -32,6 +33,8 @@ interface SocketContextValue {
   setToken: (token: string | null) => void;
   logout: () => void;
   isLoading: boolean;
+  isChatLoading: boolean;
+  reloadChat: () => void;
   typingUser: string | null;
   emitTyping: (to: string) => void;
   emitStopTyping: (to: string) => void;
@@ -46,6 +49,7 @@ const SocketContext = createContext<SocketContextValue>({
   onlineUsers: [],
   offlineUsers: [],
   refreshUsers: () => {},
+  unreadCounts: {},
   messages: [],
   sendMessage: () => {},
   currentChat: null,
@@ -54,6 +58,8 @@ const SocketContext = createContext<SocketContextValue>({
   setToken: () => {},
   logout: () => {},
   isLoading: true,
+  isChatLoading: false,
+  reloadChat: () => {},
   typingUser: null,
   emitTyping: () => {},
   emitStopTyping: () => {},
@@ -69,11 +75,18 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [onlineUsernames, setOnlineUsernames] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentChat, setCurrentChatState] = useState<string | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [token, setTokenState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isChatLoading, setIsChatLoading] = useState(false);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const currentChatRef = useRef<string | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    currentChatRef.current = currentChat;
+  }, [currentChat]);
 
   /**
    * Fetch registered users from backend
@@ -97,18 +110,41 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token]);
 
+  /**
+   * Fetch initial unread counts from backend
+   */
+  const fetchUnreadCounts = useCallback(async (authToken?: string) => {
+    const activeToken =
+      authToken || token || (typeof window !== "undefined" ? localStorage.getItem("chatpulse_token") : null);
+    if (!activeToken) return;
+
+    try {
+      const res = await fetch(`${API_URL}/messages/unread/counts`, {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.unreadCounts) {
+        setUnreadCounts(data.unreadCounts);
+      }
+    } catch (err) {
+      console.error("Failed to fetch unread counts:", err);
+    }
+  }, [token]);
+
   const refreshUsers = useCallback(() => {
     fetchRegisteredUsers();
   }, [fetchRegisteredUsers]);
 
   /**
-   * Fetch users whenever token changes
+   * Fetch users and unread counts whenever token changes
    */
   useEffect(() => {
     if (token) {
       fetchRegisteredUsers(token);
+      fetchUnreadCounts(token);
     }
-  }, [token, fetchRegisteredUsers]);
+  }, [token, fetchRegisteredUsers, fetchUnreadCounts]);
 
   /**
    * Computed list of all users with live online/offline status
@@ -167,7 +203,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     setRegisteredUsers([]);
     setOnlineUsernames([]);
     setMessages([]);
+    setUnreadCounts({});
     setCurrentChatState(null);
+    currentChatRef.current = null;
     setToken(null);
     setTypingUser(null);
   }, [setToken]);
@@ -194,6 +232,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         setTokenState(storedToken);
         setUsername(data.user.username);
         fetchRegisteredUsers(storedToken);
+        fetchUnreadCounts(storedToken);
       })
       .catch(() => {
         localStorage.removeItem("chatpulse_token");
@@ -201,7 +240,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [fetchRegisteredUsers]);
+  }, [fetchRegisteredUsers, fetchUnreadCounts]);
 
   /**
    * Connect to Socket.IO when username + token are available
@@ -234,11 +273,57 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     });
 
     newSocket.on("receive-message", (message: Message) => {
-      setMessages((prev) => [...prev, message]);
+      const isViewing = currentChatRef.current === message.from;
+
+      if (isViewing) {
+        const seenMessage: Message = { ...message, status: "seen" };
+        setMessages((prev) => [...prev, seenMessage]);
+
+        // Inform sender and backend that message was seen
+        newSocket.emit("mark-seen", { from: message.from });
+        if (token) {
+          fetch(`${API_URL}/messages/seen/${message.from}`, {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => {});
+        }
+      } else {
+        setMessages((prev) => [...prev, message]);
+        setUnreadCounts((prev) => ({
+          ...prev,
+          [message.from]: (prev[message.from] || 0) + 1,
+        }));
+      }
     });
 
     newSocket.on("message-sent", (message: Message) => {
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => {
+        const existsIndex = prev.findIndex((m) => m.id === message.id);
+        if (existsIndex >= 0) {
+          const updated = [...prev];
+          updated[existsIndex] = { ...updated[existsIndex], status: message.status || "sent" };
+          return updated;
+        }
+        return [...prev, message];
+      });
+    });
+
+    newSocket.on("messages-seen", (data: { by: string }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.to === data.by && m.from === username ? { ...m, status: "seen" } : m
+        )
+      );
+    });
+
+    newSocket.on("messages-delivered", (data: { to: string }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.to === data.to && m.from === username && m.status === "sent"
+            ? { ...m, status: "delivered" }
+            : m
+        )
+      );
     });
 
     // Typing events
@@ -262,10 +347,30 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const setCurrentChat = useCallback(
     (partner: string | null) => {
       setCurrentChatState(partner);
+      currentChatRef.current = partner;
       setTypingUser(null);
 
       if (!partner || !token) return;
 
+      // Clear unread count for this partner
+      setUnreadCounts((prev) => {
+        if (!prev[partner]) return prev;
+        const next = { ...prev };
+        delete next[partner];
+        return next;
+      });
+
+      // Mark messages as seen in socket and DB
+      if (socketRef.current) {
+        socketRef.current.emit("mark-seen", { from: partner });
+      }
+
+      fetch(`${API_URL}/messages/seen/${partner}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch((err) => console.error("Failed to mark messages seen:", err));
+
+      setIsChatLoading(true);
       fetch(`${API_URL}/messages/${partner}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -275,10 +380,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             // Replace messages for this conversation with server history,
             // then merge any client-side messages not yet in the history
             setMessages((prev) => {
-              const historyIds = new Set(
-                data.messages.map((m: Message) => m._id || `${m.from}-${m.to}-${m.timestamp}`)
-              );
-              // Keep messages from other conversations + any not in history
               const otherMessages = prev.filter(
                 (m) =>
                   !((m.from === username && m.to === partner) ||
@@ -288,10 +389,37 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             });
           }
         })
-        .catch((err) => console.error("Failed to load message history:", err));
+        .catch((err) => console.error("Failed to load message history:", err))
+        .finally(() => setIsChatLoading(false));
     },
     [token, username]
   );
+
+  /**
+   * Reload current chat messages
+   */
+  const reloadChat = useCallback(() => {
+    if (!currentChat || !token) return;
+    setIsChatLoading(true);
+    fetch(`${API_URL}/messages/${currentChat}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.messages && Array.isArray(data.messages)) {
+          setMessages((prev) => {
+            const otherMessages = prev.filter(
+              (m) =>
+                !((m.from === username && m.to === currentChat) ||
+                  (m.from === currentChat && m.to === username))
+            );
+            return [...otherMessages, ...data.messages];
+          });
+        }
+      })
+      .catch((err) => console.error("Failed to reload message history:", err))
+      .finally(() => setIsChatLoading(false));
+  }, [currentChat, token, username]);
 
   /**
    * Send a message
@@ -306,6 +434,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         to,
         content: content.trim(),
         timestamp: Date.now(),
+        status: "sent",
       };
 
       socketRef.current.emit("send-message", message);
@@ -343,6 +472,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         onlineUsers,
         offlineUsers,
         refreshUsers,
+        unreadCounts,
         messages,
         sendMessage,
         currentChat,
@@ -351,6 +481,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         setToken,
         logout,
         isLoading,
+        isChatLoading,
+        reloadChat,
         typingUser,
         emitTyping,
         emitStopTyping,
